@@ -172,6 +172,49 @@ avg_pool2d = _avg_pool('avg_pool2d', _pair)
 avg_pool3d = _avg_pool('avg_pool3d', _triple)
 
 
+def _adaptive_pool(name, type, tuple_fn, fn=None):
+
+    @parse_args('v', 'is')
+    def symbolic_fn(g, input, output_size):
+        if output_size == [1] * len(output_size) and type == 'AveragePool':
+            return g.op('GlobalAveragePool', input)
+        if not input.isCompleteTensor():
+            if output_size == [1] * len(output_size):
+                return g.op('GlobalMaxPool', input), None
+            raise ValueError('input size not accessible')
+        dim = input.type().sizes()[2:]
+        if output_size == [1] * len(output_size) and type == 'MaxPool':
+            return g.op('GlobalMaxPool', input), None
+
+        # compute stride = floor(input_size / output_size)
+        s = [int(dim[i] / output_size[i]) for i in range(0, len(dim))]
+
+        # compute kernel_size = input_size - (output_size - 1) * stride
+        k = [dim[i] - (output_size[i] - 1) * s[i] for i in range(0, len(dim))]
+
+        # call max_poolxd_with_indices to get indices in the output
+        if type == 'MaxPool':
+            return fn(g, input, k, k, (0, ) * len(dim), (1, ) * len(dim),
+                      False)
+        output = g.op(
+            type,
+            input,
+            kernel_shape_i=tuple_fn(k),
+            strides_i=tuple_fn(s),
+            ceil_mode_i=False)
+        return output
+
+    return symbolic_fn
+
+
+adaptive_avg_pool1d = _adaptive_pool('adaptive_avg_pool1d', 'AveragePool',
+                                     _single)
+adaptive_avg_pool2d = _adaptive_pool('adaptive_avg_pool2d', 'AveragePool',
+                                     _pair)
+adaptive_avg_pool3d = _adaptive_pool('adaptive_avg_pool3d', 'AveragePool',
+                                     _triple)
+
+
 def _get_im2col_indices_along_dim(g, input_d, kernel_size_d, dilation_d,
                                   padding_d, stride_d):
     # Input is always 4-D (N, C, H, W)
