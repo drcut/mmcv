@@ -6,6 +6,8 @@ from torch.nn.utils import clip_grad
 from ..fp16_utils import allreduce_grads, wrap_fp16_model
 from .hook import HOOKS, Hook
 
+from CPDtorch.utils.dist_util import sum_gradients
+
 
 @HOOKS.register_module()
 class OptimizerHook(Hook):
@@ -21,7 +23,8 @@ class OptimizerHook(Hook):
 
     def after_train_iter(self, runner):
         runner.optimizer.zero_grad()
-        runner.outputs['loss'].backward()
+        (runner.outputs['loss']/8).backward()
+        sum_gradients(runner.model, use_APS=False,grad_exp=4, grad_man=3)
         if self.grad_clip is not None:
             grad_norm = self.clip_grads(runner.model.parameters())
             if grad_norm is not None:

@@ -30,6 +30,10 @@ class MMDistributedDataParallel(DistributedDataParallel):
         """
         if getattr(self, 'require_forward_param_sync', True):
             self._sync_params()
+        
+        setattr(self, 'require_forward_param_sync', False)
+        setattr(self, 'require_backward_grad_sync', False)
+
         if self.device_ids:
             inputs, kwargs = self.scatter(inputs, kwargs, self.device_ids)
             if len(self.device_ids) == 1:
